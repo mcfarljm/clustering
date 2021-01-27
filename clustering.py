@@ -13,7 +13,6 @@
 # limitations under the License.
 import math
 
-import dwave.inspector
 from dwave.system import LeapHybridDQMSampler
 from dimod import DiscreteQuadraticModel
 
@@ -44,7 +43,7 @@ def get_max_distance(coordinates):
     return max_distance
 
 
-def cluster_points(scattered_points, filename, problem_inspector):
+def cluster_points(scattered_points, filename):
     """Perform clustering analysis on given points
 
     Args:
@@ -52,8 +51,6 @@ def cluster_points(scattered_points, filename, problem_inspector):
             Points to be clustered
         filename (str):
             Output file for graphic
-        problem_inspector (bool):
-            Whether to show problem inspector
     """
     # Set up problem
     # Note: max_distance gets used in division later on. Hence, the max(.., 1)
@@ -113,12 +110,6 @@ def cluster_points(scattered_points, filename, problem_inspector):
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--no-problem-inspector', action='store_false', dest='problem_inspector', help='do not show problem inspector')
-    args = parser.parse_args()
-    
     # Simple, hardcoded data set
     scattered_points = [(0, 0), (1, 1), (2, 4), (3, 2)]
 
@@ -129,7 +120,7 @@ if __name__ == "__main__":
     # Find clusters
     # Note: the key part of this demo is in the construction of this function
     clustered_filename = "four_points_clustered.png"
-    cluster_points(scattered_points, clustered_filename, args.problem_inspector)
+    cluster_points(scattered_points, clustered_filename)
 
     print("Your plots are saved to '{}' and '{}'.".format(orig_filename,
                                                      clustered_filename))
