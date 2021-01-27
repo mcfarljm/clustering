@@ -22,20 +22,16 @@ matplotlib.use("agg")
 import matplotlib.pyplot as plt
 
 
-def get_groupings(sample):
+def get_groupings(sample, coordinates):
     """Grab selected items and group them by color"""
     colored_points = defaultdict(list)
 
-    for label, bool_val in sample.items():
-        # Skip over items that were not selected
-        if not bool_val:
-            continue
+    colors = ('r', 'g', 'b')
 
-        # Parse selected items
-        # Note: label look like "<x_coord>,<y_coord>_<color>"
-        coord, color = label.split("_")
-        coord_tuple = tuple(map(float, coord.split(",")))
-        colored_points[color].append(coord_tuple)
+    for coord_index, color_index in sample.items():
+        coord = coordinates[coord_index]
+        color = colors[color_index]
+        colored_points[color].append((coord.x, coord.y))
 
     return dict(colored_points)
 

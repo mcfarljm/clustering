@@ -13,24 +13,19 @@
 # limitations under the License.
 import math
 
-import dwavebinarycsp
 import dwave.inspector
-from dwave.system import EmbeddingComposite, DWaveSampler
+from dwave.system import LeapHybridDQMSampler
+from dimod import DiscreteQuadraticModel
 
 from utilities import get_groupings, visualize_groupings, visualize_scatterplot
 
 
+# Note: use of a class to store the coordinates is a remnant of the
+# BQM formulation
 class Coordinate:
     def __init__(self, x, y):
         self.x = x
         self.y = y
-
-        # coordinate labels for groups red, green, and blue
-        label = "{0},{1}_".format(x, y)
-        self.r = label + "r"
-        self.g = label + "g"
-        self.b = label + "b"
-
 
 def get_distance(coordinate_0, coordinate_1):
     diff_x = coordinate_0.x - coordinate_1.x
@@ -66,32 +61,28 @@ def cluster_points(scattered_points, filename, problem_inspector):
     coordinates = [Coordinate(x, y) for x, y in scattered_points]
     max_distance = max(get_max_distance(coordinates), 1)
 
-    # Build constraints
-    csp = dwavebinarycsp.ConstraintSatisfactionProblem(dwavebinarycsp.BINARY)
 
-    # Apply constraint: coordinate can only be in one colour group
-    choose_one_group = {(0, 0, 1), (0, 1, 0), (1, 0, 0)}
+    # Initialize discrete quadratic model
+    dqm = DiscreteQuadraticModel()
     for coord in coordinates:
-        csp.add_constraint(choose_one_group, (coord.r, coord.g, coord.b))
+        dqm.add_variable(3)
 
-    # Build initial BQM
-    bqm = dwavebinarycsp.stitch(csp)
-
-    # Edit BQM to bias for close together points to share the same color
+    # Edit DQM to bias for close together points to share the same color
     for i, coord0 in enumerate(coordinates[:-1]):
-        for coord1 in coordinates[i+1:]:
+        for j in range(i+1, len(coordinates)):
+            coord1 = coordinates[j]
             # Set up weight
             d = get_distance(coord0, coord1) / max_distance  # rescale distance
             weight = -math.cos(d*math.pi)
 
             # Apply weights to BQM
-            bqm.add_interaction(coord0.r, coord1.r, weight)
-            bqm.add_interaction(coord0.g, coord1.g, weight)
-            bqm.add_interaction(coord0.b, coord1.b, weight)
+            for icolor in range(3):
+                dqm.set_quadratic_case(i, icolor, j, icolor, weight)
 
     # Edit BQM to bias for far away points to have different colors
     for i, coord0 in enumerate(coordinates[:-1]):
-        for coord1 in coordinates[i+1:]:
+        for j in range(i+1, len(coordinates)):
+            coord1 = coordinates[j]
             # Set up weight
             # Note: rescaled and applied square root so that far off distances
             #   are all weighted approximately the same
@@ -99,24 +90,21 @@ def cluster_points(scattered_points, filename, problem_inspector):
             weight = -math.tanh(d) * 0.1
 
             # Apply weights to BQM
-            bqm.add_interaction(coord0.r, coord1.b, weight)
-            bqm.add_interaction(coord0.r, coord1.g, weight)
-            bqm.add_interaction(coord0.b, coord1.r, weight)
-            bqm.add_interaction(coord0.b, coord1.g, weight)
-            bqm.add_interaction(coord0.g, coord1.r, weight)
-            bqm.add_interaction(coord0.g, coord1.b, weight)
+            dqm.set_quadratic_case(i, 0, j, 1, weight)
+            dqm.set_quadratic_case(i, 0, j, 2, weight)
+            dqm.set_quadratic_case(i, 1, j, 0, weight)
+            dqm.set_quadratic_case(i, 1, j, 2, weight)
+            dqm.set_quadratic_case(i, 2, j, 0, weight)
+            dqm.set_quadratic_case(i, 2, j, 1, weight)
 
     # Submit problem to D-Wave sampler
-    sampler = EmbeddingComposite(DWaveSampler())
-    sampleset = sampler.sample(bqm, chain_strength=4, num_reads=1000)
+    sampler = LeapHybridDQMSampler()
+    sampleset = sampler.sample_dqm(dqm)
+
     best_sample = sampleset.first.sample
 
-    # Visualize graph problem
-    if problem_inspector:
-        dwave.inspector.show(bqm, sampleset)
-
     # Visualize solution
-    groupings = get_groupings(best_sample)
+    groupings = get_groupings(best_sample, coordinates)
     visualize_groupings(groupings, filename)
 
     # Print solution onto terminal
